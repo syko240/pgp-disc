@@ -2,6 +2,7 @@ use anyhow::{anyhow, Result};
 use chrono::Local;
 use tokio::io::{self, AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tracing_subscriber::EnvFilter;
+use std::collections::VecDeque;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -18,6 +19,9 @@ async fn main() -> Result<()> {
     let cfg = common::Config::from_env()?;
 
     let mut rx = transport::start_gateway(cfg.token.clone()).await?;
+
+    // store block in mem
+    let mut pgp_inbox: VecDeque<(String, String)> = VecDeque::new();
 
     //transport::send_message(&cfg.token, cfg.channel_id, "bot online").await?;
 
@@ -37,6 +41,13 @@ async fn main() -> Result<()> {
                     if ev.channel_id == cfg.channel_id {
                         if let Some(block) = extract_pgp_message_block(&ev.content) {
                             let id = pgp_block_id(&block);
+
+                            pgp_inbox.push_back((id.clone(), block));
+                            // keep last 50
+                            while pgp_inbox.len() > 50 {
+                                pgp_inbox.pop_front();
+                            }
+
                             render_pgp_unknown(&ev.author, &id).await?;
                         } else {
                             render_incoming(&ev.author, &ev.content).await?;
