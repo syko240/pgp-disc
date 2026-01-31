@@ -1,0 +1,14 @@
+[package]
+name = "pgp-disc"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+
+[workspace]
+members = [
+  "crates/app",
+  "crates/transport",
+  "crates/common",
+]
+resolver = "2"

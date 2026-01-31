@@ -1,0 +1,13 @@
+[package]
+name = "transport"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+anyhow = "1"
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+tracing = "0.1"
+
+twilight-gateway = { version = "0.17.1", default-features = false, features = ["native-tls"] }
+twilight-http    = { version = "0.17.1", default-features = false, features = ["native-tls"] }
+twilight-model   = "0.17.1"
