@@ -39,9 +39,7 @@ async fn main() -> Result<()> {
             maybe = rx.recv() => {
                 if let Some(ev) = maybe {
                     if ev.channel_id == cfg.channel_id {
-                        if let Some(block) = extract_pgp_message_block(&ev.content) {
-                            let id = pgp_block_id(&block);
-
+                        if let Some((id, block)) = crypto::detect_pgp(&ev.content) {
                             pgp_inbox.push_back((id.clone(), block));
                             // keep last 50
                             while pgp_inbox.len() > 50 {
@@ -168,29 +166,4 @@ async fn render_pgp_unknown(author: &str, id: &str) -> Result<()> {
     out.write_all(format!("\n[{ts}] \u{2190} {author}: [PGP] message id={id} (unknown)\n").as_bytes()).await?;
     out.flush().await?;
     Ok(())
-}
-
-fn extract_pgp_message_block(input: &str) -> Option<String> {
-    const BEGIN: &str = "-----BEGIN PGP MESSAGE-----";
-    const END: &str = "-----END PGP MESSAGE-----";
-
-    let start = input.find(BEGIN)?;
-    let after_start = &input[start..];
-    let end_rel = after_start.find(END)?;
-    let end_abs = start + end_rel + END.len();
-
-    // extract pgp block
-    let block = &input[start..end_abs];
-
-    Some(block.trim().to_string())
-}
-
-/// Extract stable id from block
-fn pgp_block_id(block: &str) -> String {
-    use sha2::{Digest, Sha256};
-    let mut hasher = Sha256::new();
-    hasher.update(block.as_bytes());
-    let digest = hasher.finalize();
-    // return id
-    hex::encode(&digest[..8])
 }

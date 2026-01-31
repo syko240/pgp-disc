@@ -15,3 +15,4 @@ hex = "0.4"
 
 common = { path = "../common" }
 transport = { path = "../transport" }
+crypto = { path = "../crypto" }

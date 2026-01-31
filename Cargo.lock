@@ -33,6 +33,7 @@ dependencies = [
  "anyhow",
  "chrono",
  "common",
+ "crypto",
  "dotenvy",
  "hex",
  "sha2",
@@ -144,6 +145,14 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "59ed5838eebb26a2bb2e58f6d5b5316989ae9d08bab10e0e6d103e656d1b0280"
 dependencies = [
  "libc",
+]
+
+[[package]]
+name = "crypto"
+version = "0.1.0"
+dependencies = [
+ "hex",
+ "sha2",
 ]
 
 [[package]]

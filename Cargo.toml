@@ -10,5 +10,6 @@ members = [
   "crates/app",
   "crates/transport",
   "crates/common",
+  "crates/crypto",
 ]
 resolver = "2"
