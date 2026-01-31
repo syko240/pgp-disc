@@ -35,8 +35,9 @@ async fn main() -> Result<()> {
             maybe = rx.recv() => {
                 if let Some(ev) = maybe {
                     if ev.channel_id == cfg.channel_id {
-                        if extract_pgp_message_block(&ev.content).is_some() {
-                            render_pgp_unknown(&ev.author).await?;
+                        if let Some(block) = extract_pgp_message_block(&ev.content) {
+                            let id = pgp_block_id(&block);
+                            render_pgp_unknown(&ev.author, &id).await?;
                         } else {
                             render_incoming(&ev.author, &ev.content).await?;
                         }
@@ -150,10 +151,10 @@ async fn print_prompt(_mode: RememberedPrompt) -> Result<()> {
     Ok(())
 }
 
-async fn render_pgp_unknown(author: &str) -> Result<()> {
+async fn render_pgp_unknown(author: &str, id: &str) -> Result<()> {
     let ts = Local::now().format("%H:%M:%S");
     let mut out = io::stdout();
-    out.write_all(format!("\n[{ts}] \u{2190} {author}: [PGP] unknown message\n").as_bytes()).await?;
+    out.write_all(format!("\n[{ts}] \u{2190} {author}: [PGP] message id={id} (unknown)\n").as_bytes()).await?;
     out.flush().await?;
     Ok(())
 }
@@ -171,4 +172,14 @@ fn extract_pgp_message_block(input: &str) -> Option<String> {
     let block = &input[start..end_abs];
 
     Some(block.trim().to_string())
+}
+
+/// Extract stable id from block
+fn pgp_block_id(block: &str) -> String {
+    use sha2::{Digest, Sha256};
+    let mut hasher = Sha256::new();
+    hasher.update(block.as_bytes());
+    let digest = hasher.finalize();
+    // return id
+    hex::encode(&digest[..8])
 }
