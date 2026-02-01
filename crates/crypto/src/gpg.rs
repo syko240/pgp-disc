@@ -1,6 +1,57 @@
 use anyhow::{Result, anyhow};
+use std::fmt;
 use std::io::Write;
 use std::process::{Command, Stdio};
+
+#[derive(Debug, Clone)]
+pub enum DecryptError {
+    NotForMe { stderr: String },
+    InvalidMessage { stderr: String },
+    GpgFailed { stderr: String },
+    Io(String),
+}
+
+impl fmt::Display for DecryptError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            DecryptError::NotForMe { .. } => write!(f, "not for me"),
+            DecryptError::InvalidMessage { .. } => write!(f, "invalid pgp message"),
+            DecryptError::GpgFailed { .. } => write!(f, "gpg failed"),
+            DecryptError::Io(s) => write!(f, "{s}"),
+        }
+    }
+}
+
+impl std::error::Error for DecryptError {}
+
+fn classify_decrypt_failure(stderr: &str) -> DecryptError {
+    let s = stderr.to_lowercase();
+
+    if s.contains("no secret key")
+        || s.contains("decryption failed: no secret key")
+        || s.contains("secret key not available")
+    {
+        return DecryptError::NotForMe {
+            stderr: stderr.to_string(),
+        };
+    }
+
+    if s.contains("no valid openpgp data found")
+        || s.contains("invalid armor header")
+        || s.contains("crc error")
+        || s.contains("unexpected end of file")
+        || s.contains("bad armor")
+        || s.contains("invalid packet")
+    {
+        return DecryptError::InvalidMessage {
+            stderr: stderr.to_string(),
+        };
+    }
+
+    DecryptError::GpgFailed {
+        stderr: stderr.to_string(),
+    }
+}
 
 #[derive(Debug, Clone)]
 pub struct PublicKey {
@@ -114,36 +165,36 @@ pub fn encrypt_to_recipient(recipient: &str, plaintext: &str) -> Result<String> 
     }
 }
 
-pub fn decrypt(armored: &str) -> Result<String> {
+pub fn decrypt(armored: &str) -> std::result::Result<String, DecryptError> {
     let mut child = Command::new("gpg")
         .args(["--batch", "--decrypt"])
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
-        .map_err(|e| anyhow!("Failed to spawn gpg: {e}"))?;
+        .map_err(|e| DecryptError::Io(format!("Failed to spawn gpg: {e}")))?;
 
     {
         let stdin = child
             .stdin
             .as_mut()
-            .ok_or_else(|| anyhow!("Failed to open gpg stdin"))?;
+            .ok_or_else(|| DecryptError::Io("Failed to open gpg stdin".into()))?;
         stdin
             .write_all(armored.as_bytes())
-            .map_err(|e| anyhow!("Failed writing to gpg stdin: {e}"))?;
+            .map_err(|e| DecryptError::Io(format!("Failed writing to gpg stdin: {e}")))?;
     }
 
     let out = child
         .wait_with_output()
-        .map_err(|e| anyhow!("Failed to read gpg output: {e}"))?;
+        .map_err(|e| DecryptError::Io(format!("Failed to read gpg output: {e}")))?;
 
     if out.status.success() {
-        let plaintext =
-            String::from_utf8(out.stdout).map_err(|e| anyhow!("gpg stdout not utf8: {e}"))?;
+        let plaintext = String::from_utf8(out.stdout)
+            .map_err(|e| DecryptError::Io(format!("gpg stdout not utf8: {e}")))?;
         Ok(plaintext)
     } else {
         let err = String::from_utf8_lossy(&out.stderr).to_string();
-        Err(anyhow!("gpg decrypt failed: {err}"))
+        Err(classify_decrypt_failure(&err))
     }
 }
 

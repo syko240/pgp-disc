@@ -202,10 +202,15 @@ async fn handle_command(
                         Ok(pt) => {
                             println!("Decrypted (id={id}):\n{pt}");
                         }
+                        Err(crypto::gpg::DecryptError::NotForMe { .. }) => {
+                            println!("(id={id}) not for me");
+                        }
+                        Err(crypto::gpg::DecryptError::InvalidMessage { .. }) => {
+                            println!("(id={id}) invalid PGP message");
+                        }
                         Err(e) => {
-                            // TODO
-                            println!("(id={id}) not for me / decrypt failed");
-                            tracing::debug!("{e}");
+                            println!("(id={id}) decrypt error");
+                            tracing::debug!("{e:?}");
                         }
                     }
 
@@ -225,9 +230,15 @@ async fn handle_command(
                         Ok(pt) => {
                             println!("Decrypted (id={id}):\n{pt}");
                         }
+                        Err(crypto::gpg::DecryptError::NotForMe { .. }) => {
+                            println!("(id={id}) not for me");
+                        }
+                        Err(crypto::gpg::DecryptError::InvalidMessage { .. }) => {
+                            println!("(id={id}) invalid PGP message");
+                        }
                         Err(e) => {
-                            println!("(id={id}) not for me / decrypt failed");
-                            tracing::debug!("{e}");
+                            println!("(id={id}) decrypt error");
+                            tracing::debug!("{e:?}");
                         }
                     }
 
