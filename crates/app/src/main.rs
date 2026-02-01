@@ -106,7 +106,7 @@ enum RememberedPrompt {
 async fn handle_command(
     line: &str,
     cfg: &common::Config,
-    _pgp_inbox: &mut VecDeque<(String, String)>,
+    pgp_inbox: &mut VecDeque<(String, String)>,
 ) -> Result<CmdOutcome> {
     let mut parts = line.split_whitespace();
     let cmd = parts.next().ok_or_else(|| anyhow!("empty command"))?;
@@ -137,6 +137,9 @@ async fn handle_command(
             println!("Commands:");
             println!("  me                  Show your local GPG secret key fingerprints");
             println!("  send <message...>   Send message to channel");
+            println!("  pgp list            List captured PGP blocks");
+            println!("  pgp decrypt <id>    Try to decrypt a captured PGP block");
+            println!("  pgp decrypt-last    Try to decrypt the latest captured PGP block");
             println!("  help                Show this help");
             println!("  quit                Exit");
             Ok(CmdOutcome::Continue { print_prompt: true })
@@ -153,6 +156,67 @@ async fn handle_command(
             Ok(CmdOutcome::Continue {
                 print_prompt: false,
             })
+        }
+
+        "pgp" => {
+            let sub = parts.next().unwrap_or("");
+            match sub {
+                "list" => {
+                    if pgp_inbox.is_empty() {
+                        println!("No PGP messages captured yet.");
+                    } else {
+                        println!("Captured PGP messages (latest last):");
+                        for (id, block) in pgp_inbox.iter() {
+                            println!("  id={id} ({} chars)", block.len());
+                        }
+                    }
+                    Ok(CmdOutcome::Continue { print_prompt: true })
+                }
+
+                "decrypt-last" => {
+                    let Some((id, block)) = pgp_inbox.back().cloned() else {
+                        println!("No PGP messages captured yet.");
+                        return Ok(CmdOutcome::Continue { print_prompt: true });
+                    };
+
+                    match crypto::gpg::decrypt(&block) {
+                        Ok(pt) => {
+                            println!("Decrypted (id={id}):\n{pt}");
+                        }
+                        Err(e) => {
+                            // TODO
+                            println!("(id={id}) not for me / decrypt failed");
+                            tracing::debug!("{e}");
+                        }
+                    }
+
+                    Ok(CmdOutcome::Continue { print_prompt: true })
+                }
+
+                "decrypt" => {
+                    let id = parts
+                        .next()
+                        .ok_or_else(|| anyhow!("Usage: pgp decrypt <id>"))?;
+                    let Some((_id, block)) = pgp_inbox.iter().find(|(i, _)| i == id).cloned()
+                    else {
+                        return Err(anyhow!("No captured PGP message with id={id}"));
+                    };
+
+                    match crypto::gpg::decrypt(&block) {
+                        Ok(pt) => {
+                            println!("Decrypted (id={id}):\n{pt}");
+                        }
+                        Err(e) => {
+                            println!("(id={id}) not for me / decrypt failed");
+                            tracing::debug!("{e}");
+                        }
+                    }
+
+                    Ok(CmdOutcome::Continue { print_prompt: true })
+                }
+
+                _ => Err(anyhow!("Usage: pgp <list|decrypt <id>|decrypt-last>")),
+            }
         }
 
         "quit" | "exit" | "q" => Ok(CmdOutcome::Quit),
