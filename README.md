@@ -18,6 +18,7 @@ cargo run -p app
   - permissions:
     - <b>View Channels</b>
     - <b>Send Messages</b>
+    - <b>Read Message History</b>
 
 ## Env
   - bot token
