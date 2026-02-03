@@ -27,23 +27,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a23eb6b1614318a8071c9b2521f36b424b2c83db5eb3a0fead4a6c0809af6e61"
 
 [[package]]
-name = "app"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "chrono",
- "common",
- "crypto",
- "dotenvy",
- "owo-colors",
- "rustyline",
- "tokio",
- "tracing",
- "tracing-subscriber",
- "transport",
-]
-
-[[package]]
 name = "atomic-waker"
 version = "1.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -713,6 +696,19 @@ checksum = "9b4f627cb1b25917193a259e49bdad08f671f8d9708acfd5fe0a8c1455d87220"
 [[package]]
 name = "pgp-disc"
 version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "common",
+ "crypto",
+ "dotenvy",
+ "owo-colors",
+ "rustyline",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+ "transport",
+]
 
 [[package]]
 name = "pin-project-lite"
