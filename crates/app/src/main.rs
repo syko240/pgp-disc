@@ -37,6 +37,7 @@ enum UiEvent {
 struct CliHelper {
     commands: Arc<Vec<&'static str>>,
     pgp_sub: Arc<Vec<&'static str>>,
+    pgp_send_flags: Arc<Vec<&'static str>>,
     export_sub: Arc<Vec<&'static str>>,
     export_unset: Arc<Vec<&'static str>>,
 }
@@ -62,11 +63,16 @@ impl Completer for CliHelper {
 
         let choices: &[&'static str] = match parts.as_slice() {
             [] => &self.commands,
-            [first] if *first == "pgp" => &self.pgp_sub,
-            [first, _] if *first == "pgp" => &self.pgp_sub,
-            [first] if *first == "export" => &self.export_sub,
-            [first, _] if *first == "export" => &self.export_sub,
+
+            ["pgp"] => &self.pgp_sub,
+            ["pgp", "send"] => &self.pgp_send_flags,
+            ["pgp", "send", flag] if flag.starts_with('-') => &self.pgp_send_flags,
+            ["pgp", _] => &self.pgp_sub,
+
+            ["export"] => &self.export_sub,
             ["export", "unset"] => &self.export_unset,
+            ["export", _] => &self.export_sub,
+
             _ => &self.commands,
         };
 
@@ -127,6 +133,7 @@ fn spawn_cli_thread() -> (
                 "exit", "q", "clear",
             ]),
             pgp_sub: Arc::new(vec!["list", "send", "decrypt", "decrypt-last"]),
+            pgp_send_flags: Arc::new(vec!["-r"]),
             export_sub: Arc::new(vec!["recipient", "channel", "show", "unset"]),
             export_unset: Arc::new(vec!["recipient", "channel"]),
         };
@@ -403,7 +410,7 @@ async fn handle_command(
                 for k in keys {
                     match k.uid {
                         Some(uid) => out_lines.push(format!("  {}  —  {}", k.fpr.dimmed(), uid)),
-                        None => out_lines.push(format!("  {}", k.fpr.dimmed())),
+                        _ => out_lines.push(format!("  {}", k.fpr.dimmed())),
                     }
                 }
             }
@@ -484,28 +491,48 @@ async fn handle_command(
 
                 "send" => {
                     let first = parts.next().ok_or_else(|| {
-                        anyhow!("Usage: pgp send <fpr> <message...> OR pgp send <message...>")
+                        anyhow!(
+                            "Usage: pgp send <message...> OR pgp send -r <fpr|uid> <message...>"
+                        )
                     })?;
 
-                    let rest = parts.collect::<Vec<_>>().join(" ");
+                    let mut recipient: Option<String> = None;
+                    let mut msg_parts: Vec<String> = Vec::new();
 
-                    let (recipient, msg) = if !rest.trim().is_empty() {
-                        (first.to_string(), rest)
+                    if matches!(first, "-r") {
+                        let r = parts
+                            .next()
+                            .ok_or_else(|| anyhow!("Usage: pgp send -r <fpr|uid> <message...>"))?;
+                        recipient = Some(r.to_string());
+                        msg_parts = parts.map(|s| s.to_string()).collect();
+                        if msg_parts.is_empty() {
+                            return Err(anyhow!("Usage: pgp send -r <fpr|uid> <message...>"));
+                        }
                     } else {
-                        let Some(def) = env.default_fpr.clone() else {
-                            return Err(anyhow!("No exported fpr set. Use: export fpr <fpr|uid>"));
-                        };
-                        (def, first.to_string())
+                        // No recipient flag
+                        msg_parts.push(first.to_string());
+                        msg_parts.extend(parts.map(|s| s.to_string()));
+                    }
+
+                    let recipient = match recipient {
+                        Some(r) => r,
+                        _ => env.default_fpr.clone().ok_or_else(|| {
+                            anyhow!("No exported recipient set. Use: export recipient <fpr|uid>")
+                        })?,
                     };
+
+                    let msg = msg_parts.join(" ");
 
                     let armored = crypto::gpg::encrypt_to_recipient(&recipient, &msg)?;
                     transport::send_message(&cfg.token, env.set_channel_id(cfg), &armored).await?;
+
                     out_lines.push(format!(
                         "{} {} {}",
                         "→ sent encrypted PGP message".green(),
                         "to".dimmed(),
                         recipient.cyan()
                     ));
+
                     return Ok((CmdOutcome::Continue, out_lines, ui_events));
                 }
 
@@ -585,8 +612,12 @@ fn render_help() -> String {
             "Try to decrypt the latest captured PGP block",
         ),
         (
-            "pgp send <fpr|uid> <message...>",
-            "Encrypt and send to Discord",
+            "pgp send <message...>",
+            "Encrypt and send using exported recipient",
+        ),
+        (
+            "pgp send -r <fpr|uid> <message...>",
+            "Encrypt and send to an explicit recipient",
         ),
     ];
 
