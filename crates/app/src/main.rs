@@ -62,6 +62,7 @@ impl Completer for CliHelper {
         let parts: Vec<&str> = before.split_whitespace().collect();
 
         let choices: &[&'static str] = match parts.as_slice() {
+            // TODO: this
             [] => &self.commands,
 
             ["pgp"] => &self.pgp_sub,
